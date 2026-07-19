@@ -101,6 +101,7 @@ project/
 - 新規機能の実装や修正が発生した場合は、master で直接作業せず、新しくブランチを作成してそちらで作業する
   - ブランチ名：`feature/実装内容が分かる名前`（例：`feature/edit-upload-scripts`、`feature/fix-bgm-loop`）
 - 実装が完了したら、ブランチを push し、master への Pull Request を作成するところまで行う
+- **push する前に必ずユーザーへ確認を取る**（Claude は無断で push しない。push 対象のブランチ名とコミット内容を提示し、了承を得てから実行する）
 - PR のマージはユーザーが内容を確認してから行う（Claude は自動でマージしない）
 
 ## 作業の進め方（Claudeへの指示）
