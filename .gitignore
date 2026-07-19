@@ -1,0 +1,21 @@
+# 認証情報（コードに直書きしない）
+.env
+client_secret*.json
+token*.json
+
+# Python
+__pycache__/
+*.pyc
+
+# メディア素材・生成物（サイズが大きいためgit管理外）
+input/*.mp4
+output/*.mp4
+output/*.jpg
+output/*.txt
+bgm/*
+!bgm/.gitkeep
+fonts/*.ttf
+fonts/*.otf
+
+# エラーログ
+upload_errors.log
