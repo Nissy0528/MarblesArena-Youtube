@@ -6,6 +6,7 @@ token*.json
 # Python
 __pycache__/
 *.pyc
+.venv/
 
 # メディア素材・生成物（サイズが大きいためgit管理外）
 input/*.mp4
