@@ -1,91 +1,77 @@
 ---
 name: edit_video
-description: input/ の長尺録画（マーブルラン素材）から「煽り表示→球が動き出す→結果表示」の3段構成でYouTube Shorts用（尺は可変、目安20〜30秒）に自動編集する。
+description: input/ の長尺録画（マーブルラン素材）から、額縁フレーム＋日英テキスト＋SUBSCRIBE/Thank youオーバーレイ＋BGMのみ音声のYouTube Shorts（尺は可変、目安20〜30秒）を scripts/edit.py で半自動編集する。
 ---
 
 # 動画編集スキル（Marbles Arena / 予想系Shorts）
 
+## 方針（重要）
+理想の完成形は After Effects 製の動画（`input/026_N016_...mp4`）。**そのAEプロジェクトは別PC・別ユーザーの管理でアクセス不可**のため、本スキルでは `scripts/edit.py`（Python + FFmpeg）で**AE版の見た目を最大限“近似”する**。高度なモーショングラフィックスの1:1再現は目指さない。
+
 ## 入力
-- `input/` にある長尺録画（MP4、実測：1080×1920px / 60fps / H.264 / AAC 48kHz、約60〜61秒）
-- `bgm/` にある既存BGM（前回動画から引き続き使用。新規選定はせず、フォルダ内の既存ファイルをそのまま使う）
-- 煽りテキスト・結果発表テキスト（基本は固定文言、本ファイル内テンプレートを参照）
+- `input/` の長尺録画（MP4、実測：1080×1920 / 60fps / H.264 / AAC 48kHz、約60〜61秒）
+- `bgm/` の既存BGM（前回動画から引き続き使用。新規選定はしない）
+- `assets/` のオーバーレイ動画（再利用素材、著作権フリー）
+  - SUBSCRIBEボタン：グリーンバック（例 `サブスクライブ素材｜英語・シンプル・Youtube.mp4`）
+  - Thank you：黒背景の筆記体アニメ（例 `67183_1280x720.mp4`）
+- `fonts/NotoSansJP.ttf`（日本語フォント。可変フォントの場合はこの名前でコピーを用意）
 
-## 完成形の構成（実例 s2p11=20秒／s2p8=28秒 に準拠。**尺は固定ではなく可変**）
-1. **煽りフェーズ**：「3秒で入る球予想してね！」の煽りテキストを表示。球が動き出す直前の場面に重ねる
-2. **レースフェーズ**：球が動き出し、コースを転がっていく本編。不自然にカットせず、球の動きが自然に見える尺を確保する（ここの長さが動画ごとの尺の差になる）
-3. **結果フェーズ**：どの色の球が入ったか結果が分かるカットで締める。「正解は最後！」に矛盾しないよう、結果が明確に映る瞬間で終わる
-4. 合計尺は**目安20〜30秒程度**。60秒の上限にこだわらず、球が動き出してから結果が出るまでの実時間に合わせる
+## 完成形の構成（`input/026_N016` を目標に近似）
+- **額縁フレーム**：ゲーム映像を横幅約91%で中央配置、外周は同映像のぼかし＋暗め背景
+- **日英テキスト（導入0〜4秒）**：上部に煽り「何色が入る？？」（黒帯・ピンク）、下部に英語字幕「Which ball color goes into the goal?」（白）
+- **SUBSCRIBEオーバーレイ**：レース中盤に数秒、下部に合成（グリーンバックをクロマキー＋despillで抜く）
+- **Thank youオーバーレイ**：SUBSCRIBEの直後、SUBSCRIBEと同じ高さに合成（黒背景をcolorkeyで抜く）
+- **音声：元素材はミュートし、BGMのみ**（volume=0.5基準）
+- 尺は可変（目安20〜30秒）。球が動き出してから結果が出るまでの実時間に合わせる
 
-## 処理手順（半自動フロー：CLAUDE.md「見どころ区間の切り出しルール」に準拠）
-1. **情報確認**：`ffprobe` で入力動画の長さ・解像度・fpsを確認する
-2. **仮切り出し（自動）**：球が動き出す直前と推定される位置（初期ルール：**末尾から30秒**）〜末尾までを候補区間として自動でトリミングする
-3. **確認提示**：仮切り出しした候補区間（またはプレビュー用の静止画数枚）をユーザーに提示し、以下を確認してもらう
-   - 球が動き出す瞬間から結果までが過不足なく含まれているか
-   - 煽りフェーズを重ねる位置（球が動く直前の場面）が適切か
-   - 結果が決まる瞬間がちゃんと含まれているか
-4. **調整（必要な場合のみ）**：ズレの指摘があれば開始位置・各フェーズの切り替え位置を調整し、再度候補を提示する。確定するまで本編集には進まない
-5. **確定後の本編集**：
-   a. フレームレート変換（60fps → 30fps）
-   b. 縦型統一（1080×1920以外の場合はクロップ＋パディング。今回の素材は通常不要）
-   c. 煽りフェーズの区間に「3秒で入る球予想してね！」を `drawtext` で焼き込む
-   d. （任意）結果フェーズの区間に結果を強調するテキストを焼き込む
-   e. 緊張感を煽るBGMを `volume=0.3` 程度でミックス
-6. **出力**：`output/YYYYMMDD_HHMMSS.mp4` として保存（既存ファイルを上書きしない）
+## 実行環境の注意
+- Windowsのため、日本語の出力・ファイル名で文字化け/例外を避けるには **`PYTHONUTF8=1 PYTHONIOENCODING=utf-8`** を付けて実行する。
+- `ffmpeg` / `ffprobe` にPATHが通っていること。Python実行は仮想環境 `.venv` を使う。
 
-## FFmpegコマンドテンプレート
+## 処理フロー（半自動：CLAUDE.md「見どころ区間の切り出しルール」に準拠）
+1. **情報確認**：`info` で長さ・解像度・fpsと仮切り出し候補を確認
+   ```bash
+   PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python scripts/edit.py info "input/{ファイル名}.mp4"
+   ```
+2. **仮切り出し（自動）**：`preview` で末尾30秒を候補区間として書き出し、確認用静止画も出す
+   ```bash
+   PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python scripts/edit.py preview "input/{ファイル名}.mp4" --stills 6
+   ```
+3. **確認（ユーザー必須）**：プレビュー動画／静止画を提示し、①球が動き出す瞬間〜結果が過不足なく入るか ②煽りを重ねる位置 ③結果が決まる瞬間が入るか を確認してもらう。**確定するまで本編集に進まない。**
+4. **調整**：ズレがあれば `--start` を前後させて `preview` を再実行
+5. **本編集**：確定した開始秒で `finalize`
+   ```bash
+   PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python scripts/edit.py finalize "input/{ファイル名}.mp4" --start {確定開始秒}
+   ```
+6. **出力**：`output/YYYYMMDD_HHMMSS.mp4`（既存は上書きしない。中間テキストは自動削除）
 
-### Step1: 候補区間の仮切り出し（確認用、末尾から30秒）
-```bash
-# 総尺を取得
-DURATION=$(ffprobe -v error -show_entries format=duration -of csv=p=0 input/{ファイル名}.mp4)
-START=$(echo "$DURATION - 30" | bc)
+## finalize が内部で行うこと（単一の filter_complex で1パス処理）
+1. トリム（`--start`〜`--end`、既定は末尾まで）＋ `fps=30` 化
+2. 額縁：`[bg]=scale(fill)+crop+boxblur+eq(暗く)`、`[fg]=scale(横幅91%)` を中央 `overlay`
+3. 日英 `drawtext`（textfile経由でエスケープ回避。表示区間は `enable='between(t,0,4)'`）
+4. SUBSCRIBE：`chromakey`（緑抜き）＋`despill`（緑スピル除去）＋`scale`＋`setpts=PTS-STARTPTS+開始/TB`（表示区間の頭から再生）→ `overlay`（`enable` で区間指定）
+5. Thank you：`colorkey`（黒抜き）＋`scale`＋`setpts`（同上）→ `overlay`（SUBSCRIBEと同じ垂直中心）
+6. 音声：`[bgm]volume=0.5,atrim=0:尺,asetpts` のみを `-map`（元素材の音声は使わない＝ミュート）
+7. `libx264 -crf 20 -preset medium` / `aac 44100 128k` / `+faststart`
 
-ffmpeg -ss $START -i input/{ファイル名}.mp4 \
-  -c:v libx264 -preset veryfast -crf 23 \
-  -c:a aac \
-  output/_preview_{ファイル名}.mp4
-```
-このプレビューをユーザーに提示し、開始位置・煽りフェーズの重ね位置を確認・調整してから Step2 に進む。
-
-### Step2: 確定した区間で本エンコード＋30fps化
-開始位置（`{確定した開始秒数}`）と終了位置（`{確定した終了秒数}`、通常は素材の末尾）はStep1の確認結果に基づいて決める。長さは固定しない。
-```bash
-ffmpeg -ss {確定した開始秒数} -to {確定した終了秒数} -i input/{ファイル名}.mp4 \
-  -vf "fps=30" \
-  -c:v libx264 -preset medium -crf 20 \
-  -c:a aac -ar 44100 -b:a 128k \
-  -movflags +faststart \
-  output/{YYYYMMDD_HHMMSS}_raw.mp4
-```
-
-### 煽りテキストの焼き込み（煽りフェーズの区間、目安0〜3秒程度に表示）
-```bash
-ffmpeg -i output/{YYYYMMDD_HHMMSS}_raw.mp4 \
-  -vf "drawtext=fontfile=fonts/NotoSansJP.ttf:text='3秒で入る球予想してね！':\
-fontcolor=white:fontsize=64:box=1:boxcolor=black@0.5:boxborderw=10:\
-x=(w-text_w)/2:y=100:enable='between(t,{煽り開始秒},{煽り終了秒})'" \
-  -c:v libx264 -preset medium -crf 20 \
-  -c:a copy \
-  output/{YYYYMMDD_HHMMSS}_text.mp4
-```
-
-### （任意）結果フェーズのテキスト焼き込み
-結果を強調したい場合は、同様に `drawtext` を追加し `enable='between(t,{結果開始秒},{結果終了秒})'` で結果フェーズの区間にのみ表示する。
-
-### BGM合成（最終出力、動画の全尺に合わせる）
-```bash
-ffmpeg -i output/{YYYYMMDD_HHMMSS}_text.mp4 -i bgm/{BGMファイル名}.mp3 \
-  -filter_complex "[1:a]volume=0.3,atrim=0:{動画の全尺秒数}[bgm];[0:a][bgm]amix=inputs=2:duration=first[aout]" \
-  -map 0:v -map "[aout]" \
-  -c:v copy \
-  -c:a aac -ar 44100 -b:a 128k \
-  -movflags +faststart \
-  output/{YYYYMMDD_HHMMSS}.mp4
-```
-※ 中間ファイル（`_raw.mp4`, `_text.mp4`）は最終出力生成後に削除してよい
+## 主なオプション（調整用、既定値）
+- `--start`（必須） / `--end`：切り出し区間
+- `--aori-start 0 --aori-end 4 --aori-color 0xff2fd0`：煽り・英語字幕の表示区間と色
+- `--sub-start`（既定：尺の45%）`--sub-dur 3.5`：SUBSCRIBEの表示開始・秒数
+- `--sub-width 1500`：SUBSCRIBEの大きさ（大きいほど額縁との左右隙間が狭まる）
+- `--sub-y 1560`：SUBSCRIBE/Thank youの垂直中心（両者で共有＝同じ高さ）
+- `--sub-similarity 0.12 --sub-blend 0.02 --sub-despill 0.7`：クロマキー調整（緑残り/半透明の対策）
+- `--ty-start`（既定：SUBSCRIBE直後）`--ty-dur 4`：Thank youの表示開始・秒数
+- `--subscribe / --thankyou`：オーバーレイ素材のパス（省略時は assets/→input/ から自動検出）
+- `--no-subscribe / --no-thankyou`：各オーバーレイを入れない
+- `--bgm`（省略時 bgm/ 自動選択）`--bgm-volume 0.5`
+- `--keep-temp`：中間テキストを残す
 
 ## エラー時の対処
-- 見どころ区間がうまく特定できない → `-ss` の候補を複数試し、静止画（`-vframes 1`）で書き出して目視確認してから本エンコードする
-- フォントが見つからない → `fonts/NotoSansJP.ttf` の存在とパスを確認
-- 音声がずれる → `-async 1` オプションを追加
-- 球の動きが不自然に途切れる → レースフェーズを削りすぎている可能性があるため、開始位置をより早めに調整する
+- **文字化け/`UnicodeEncodeError: cp932`** → `PYTHONUTF8=1 PYTHONIOENCODING=utf-8` を付けて実行
+- **フォントが見つからない** → `fonts/NotoSansJP.ttf` の存在を確認（可変フォントはこの名前でコピー）
+- **SUBSCRIBEに緑が残る** → `--sub-despill` を上げる／`--sub-similarity` を少し上げる
+- **SUBSCRIBEが半透明になる** → `--sub-similarity` を下げる（緑以外＝無彩色まで抜けている）
+- **オーバーレイが表示区間で出ない/尽きる** → `setpts` で頭出ししているのが前提。素材の尺 < 表示秒数なら `--sub-dur`/`--ty-dur` を縮める
+- **音がしない/BGMが小さい** → 元素材はミュート仕様。BGMは `--bgm-volume` で調整
+- **見どころ区間がずれる** → `preview --start` の候補を変えて再確認してから finalize

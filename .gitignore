@@ -17,6 +17,8 @@ bgm/*
 !bgm/.gitkeep
 se/*
 !se/.gitkeep
+assets/*
+!assets/.gitkeep
 fonts/*.ttf
 fonts/*.otf
 

@@ -18,6 +18,7 @@ import argparse
 import csv
 import json
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +33,9 @@ ENV_PATH = PROJECT_ROOT / ".env"
 
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 LOG_FIELDS = ["timestamp", "filename", "video_id", "season", "part"]
+
+# 完成動画は YYYYMMDD_HHMMSS[...].mp4 形式。これ以外（プレビュー・中間・テスト用）は投稿候補にしない
+TIMESTAMP_RE = re.compile(r"^\d{8}_\d{6}")
 
 
 def load_env():
@@ -67,8 +71,8 @@ def list_unuploaded():
     if OUTPUT_DIR.exists():
         for p in sorted(OUTPUT_DIR.glob("*.mp4")):
             name = p.name
-            if name.startswith("_") or name.endswith(("_raw.mp4", "_text.mp4")):
-                continue  # プレビュー・中間ファイルは対象外
+            if not TIMESTAMP_RE.match(name):
+                continue  # プレビュー・中間・テスト用など、採番ルール外の名前は対象外
             if name in uploaded:
                 continue
             candidates.append(p)
