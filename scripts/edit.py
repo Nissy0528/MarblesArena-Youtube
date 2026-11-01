@@ -63,9 +63,34 @@ RESULT_LABEL_FONTSIZE = 110      # 当たりの穴に入った玉の色を示す
 RESULT_LABEL_REVEAL = 0.3        # 当たり色の文字が生えきるまでの秒数
 RESULT_LABEL_GAP = 4             # バナーの縁と当たり色の文字のすき間
 # 当たりが1色だけのとき（バナーは上から下へ伸び、色名は下から上へ出現して短く点滅）
-SINGLE_RISE = 0.12               # 色名が下から上へ出現しきるまでの秒数（速め）
-SINGLE_FLASH_STEP = 0.06         # 白/色の切り替え間隔（短め）
-SINGLE_FLASH_DUR = 0.36          # 点滅を続ける秒数（短め）
+SINGLE_FONTSIZE = 225            # 色名の文字サイズ（インク高さ約158px）
+SINGLE_MAX_W = 1040              # 拡大しきった色名の幅の上限px。超える長い色名（LIGHT BLUE 等）は文字サイズを自動で縮める
+SINGLE_RISE = 0.5                # 色名が下から上へ出現しきるまでの秒数（円形「GOAL!!」の上への移動も同じ秒数で止まる）
+SINGLE_RISE_EASE = 4             # 出現の減速の強さ（大きいほど最初速く、だんだんゆっくり）
+SINGLE_ZOOM = 1.15               # 上がりきった後に拡大する倍率
+SINGLE_ZOOM_DUR = 0.3            # 拡大にかける秒数（この間だけ白/色で点滅し、終わったら色名の色で止まる）
+SINGLE_FLASH_STEP = 2 / 30       # 白/色の切り替え間隔（30fpsで2コマずつ。0.06だと2コマと1コマが混ざってばらついた）
+SINGLE_SHOW_BANNER = True        # バナーを出すか（色名が上がりきって拡大し始めると同時に出す）
+SINGLE_BANNER_PAD_Y = 20         # バナーの上下の余白px（拡大しきった色名のインクに対して）
+SINGLE_BANNER_PAD_X = 40         # 色名がバナー幅（RESULT_BANNER_W）より広いときの左右の余白px
+# 1色のときバナーの後ろに出す、円形に切り抜いた「GOAL!!」の中抜き文字（円は中央から広がる）
+RING_TEXT = "GOAL!!"
+RING_FONTSIZE = 200              # インク幅約660px・高さ約138px
+RING_RADIUS = 420                # 広がりきった円の半径px（中心はバナー中心）
+RING_ROW_PITCH = 160             # 段の縦ピッチ
+RING_STROKE = 2                  # 輪郭線の太さ（円の内側に収まる段）
+RING_STROKE_CUT = 5              # 円からはみ出す段の輪郭線の太さ（少し太く）
+RING_SCALE_FROM = 0.27           # 円の出始めの大きさ（広がりきった半径に対する比）。文字は原寸のまま
+RING_SCROLL_LOOPS = 1            # 各段が左右に動く量（「GOAL!!」何個ぶんか）。整数にすると全段が元の中央の位置で揃って止まる。
+                                 # 円の広がりと同時に動き出し、同じ減速で広がりきると同時に止まる（中央の段は右、外側へ1段ごとに左右が入れ替わる）
+RING_SCROLL_GAP = 40             # 流れる「GOAL!!」どうしの間隔px（ループのつなぎ目）
+RING_HOLD = 0.1                  # 円が出てから、小さいまま止まっている秒数（この後に広がる）
+RING_GROW = 1.0                  # 原寸まで広がりきるまでの秒数
+RING_RISE_DIST = 320             # 円が広がりきった後、全段が上へ動く距離px（2段ぶん＝動き終わりで元と同じ並びになる）。
+                                 # 色名と同時に動き出し、同じ減速で色名が上がりきると同時に止まる（上から出た段は下から現れる）
+RING_SHRINK = 0.8                # 色名が拡大し始めると同時に文字を縮める倍率（円の大きさは変えず、空いた所も文字で埋まる）
+RING_RISE2_DIST = 160            # 縮めるのと同時に、さらに上へ動く距離px。バナーが出きると同時に止まる
+RING_GROW_EASE = 4               # 広がり・文字の移動の減速の強さ（大きいほど最初速く、だんだんゆっくり＝慣性が強い）
 # バナー左下の「＞＞＞」（フォントではなく図形として描く。黒→半透明→…と変化しながら左右に揺れる）
 CHEV_COUNT = 3
 CHEV_PITCH = 99                  # 3つの間隔px
@@ -646,9 +671,11 @@ def result_layer_filters(src, res_start, result_y, goal_layout, goal_rel, labels
     return filters, layers, band_top
 
 
-def result_single_layer_filters(src, res_start, result_y, lay, rel, rgb, chev=False):
-    """当たりが1色だけのときの結果表示。バナーは上辺を固定して下へ伸び、色名はバナーの下辺から
-    上へ出現して、白と色名の色で短く点滅する。左下の「＞＞＞」は出さない（chev=True で出せる）。
+def result_single_layer_filters(src, res_start, result_y, lay, rel, rgb, chev=False,
+                                show_banner=True, text_start=RESULT_GROW):
+    """当たりが1色だけのときの結果表示。色名は白で下からせり上がり、上がりきったら少し拡大しながら
+    白⇔色名の色で点滅して止まる。バナーは拡大の開始と同時に、上辺を固定して下へ伸びる。左下の「＞＞＞」は出さない（chev=True で出せる）。
+    show_banner=False ならバナーを出さず色名だけ出す。text_start: 色名を出し始める秒（res_start 基準）。
     戻り値は (フィルタ列, 重ねる順のレイヤー名, 画面Y)。"""
     pad = RESULT_BAND_PAD
     x0, x1 = (1080 - RESULT_BANNER_W) // 2, (1080 + RESULT_BANNER_W) // 2
@@ -656,34 +683,49 @@ def result_single_layer_filters(src, res_start, result_y, lay, rel, rgb, chev=Fa
     bottom = pad + RESULT_BANNER_H
     cyb = bottom - RESULT_BANNER_H / 2
     shift = f"setpts=PTS-STARTPTS+{res_start:g}/TB"
-    # バナー：上辺 pad を固定して下辺が下りてくる。色は黄→黒→黄→黒
-    is_y = f"(lt(T,0.1)+gte(T,0.2)*lt(T,{RESULT_FLASH_END:g}))"
-    low = (f"({pad}+{RESULT_BANNER_MIN_H}+{RESULT_BANNER_H - RESULT_BANNER_MIN_H}"
-           f"*clip(T/{RESULT_GROW:g},0,1))")
-    banner = f"gte(X,{x0})*lt(X,{x1})*gte(Y,{pad})*lt(Y,{low})"
-    # 色名：バナーが出きってから下から上へ出現（バナーの内側だけ表示するので下辺から生えて見える）
-    t_show = RESULT_GROW
+    t_show = text_start
+    t_up = t_show + SINGLE_RISE                                  # 色名が上がりきる秒（＝拡大とバナーの開始）
     ih = lay["y2"] - lay["y1"] + 1
+    iw = lay["bands"][-1][1] - lay["bands"][0][0]
+    # バナー：色名が拡大し始めると同時に、上辺を固定して下辺が下りてくる。色は黄→黒→黄→黒。
+    # 大きさは拡大しきった色名が収まるように決める（高さは色名＋上下の余白、幅は既定幅より広い色名なら広げる）
+    bh = max(RESULT_BANNER_H, round(ih * SINGLE_ZOOM) + 2 * SINGLE_BANNER_PAD_Y)
+    bw = min(1080, max(RESULT_BANNER_W, round(iw * SINGLE_ZOOM) + 2 * SINGLE_BANNER_PAD_X))
+    bx0, bx1 = (1080 - bw) // 2, (1080 + bw) // 2
+    b_top = round(cyb - bh / 2)
+    tb = f"(T-{t_up:g})"
+    is_y = f"(lt({tb},0.1)+gte({tb},0.2)*lt({tb},{RESULT_FLASH_END:g}))"
+    low = f"({b_top}+{RESULT_BANNER_MIN_H}+{bh - RESULT_BANNER_MIN_H}*clip({tb}/{RESULT_GROW:g},0,1))"
+    banner = f"gte(T,{t_up:g})*gte(X,{bx0})*lt(X,{bx1})*gte(Y,{b_top})*lt(Y,{low})"
+    # 色名：下から上へせり上がる（バナーの範囲だけ表示するので下辺から生えて見える。最初速く、だんだんゆっくり）。
+    # 上がりきるまでは白。上がりきったら少し拡大し、拡大中は白と色名の色で点滅して、色名の色で止まる
     gy = cyb - (lay["y1"] + lay["y2"]) / 2                       # インクがバナー中央に来る描画Y
-    rise = bottom - (cyb - ih / 2) + 4                           # 隠れ位置（バナー下辺の下）までの距離
+    lo, hi = cyb - ih / 2 - 4, cyb + ih / 2 + 4                  # 上がりきった文字の上下（＋余白）。この範囲から生える
+    rise = hi - (cyb - ih / 2) + 4                               # 隠れ位置（この範囲の下辺の下）までの距離
     p = f"clip((T-{t_show:g})/{SINGLE_RISE:g},0,1)"
-    v = f"Y-{rise:g}*(1-{p})"                                   # 開始時は下（バナーの外）に置き、上へ移動
-    inside = f"gte(X,{x0})*lt(X,{x1})*gte(Y,{pad})*lt(Y,{bottom})"
-    # 点滅：白と色名の色を短い間隔で入れ替え、SINGLE_FLASH_DUR 後は色名の色で止まる。
+    z = f"(1+{SINGLE_ZOOM - 1:g}*(1-pow(1-clip((T-{t_up:g})/{SINGLE_ZOOM_DUR:g},0,1),2)))"   # 拡大率 1→SINGLE_ZOOM
+    # 画面の(X,Y)を拡大率で割り戻して文字の座標を拾う（中心から拡大）。せり上がり中は下へずらした位置から拾う
+    u = f"540+(X-540)/{z}"
+    v = f"{cyb:g}+(Y-{cyb:g})/{z}-{rise:g}*pow(1-{p},{SINGLE_RISE_EASE:g})"
+    # 上がりきるまでは、上がりきった文字の範囲だけ表示（その下辺から生える）。拡大は範囲からはみ出してよい
+    inside = f"if(lt(T,{t_up:g}),gte(Y,{lo:g})*lt(Y,{hi:g}),1)"
+    # 色：上がりきるまで白、拡大中は白⇔色名の色で点滅、拡大後は色名の色。
     # 判定は半コマ後ろの時刻で行う（コマ時刻をそのまま割ると境目で誤差が出てコマ数がばらつくため）
-    flash = (f"lt(T,{t_show + SINGLE_FLASH_DUR:g})"
-             f"*mod(floor((T-{t_show:g}+{0.5 / 30:g})/{SINGLE_FLASH_STEP:g}),2)")
-    cols = [f"{c}+{255 - c}*({flash})" for c in rgb]             # 色 ⇔ 白
-    filters = [
-        f"[{src}]format=rgba,colorchannelmixer=aa=0,split={3 if chev else 2}"
-        f"[sglB0][sglT0]" + ("[sglC0]" if chev else ""),
-        f"[sglB0]geq=r='{is_y}*241':g='{is_y}*196':b='{is_y}*15':a='if({banner},255,0)',{shift}[sglBG]",
+    flash = f"mod(floor((T-{t_up:g}+{0.5 / 30:g})/{SINGLE_FLASH_STEP:g}),2)"
+    white = f"if(lt(T,{t_up:g}),1,if(lt(T,{t_up + SINGLE_ZOOM_DUR:g}),{flash},0))"
+    cols = [f"{c}+{255 - c}*({white})" for c in rgb]             # 色 ⇔ 白
+    outs = (["[sglB0]"] if show_banner else []) + ["[sglT0]"] + (["[sglC0]"] if chev else [])
+    filters = [f"[{src}]format=rgba,colorchannelmixer=aa=0,split={len(outs)}" + "".join(outs)]
+    if show_banner:
+        filters.append(f"[sglB0]geq=r='{is_y}*241':g='{is_y}*196':b='{is_y}*15':"
+                       f"a='if({banner},255,0)',{shift}[sglBG]")
+    filters += [
         f"[sglT0]drawtext=fontfile={FONT_REL}:textfile={rel}:fontcolor=white:"
-        f"fontsize={GOAL_FONTSIZE}:x={lay['x']}:y={gy:g},"
+        f"fontsize={lay.get('fontsize', SINGLE_FONTSIZE)}:x={lay['x']}:y={gy:g},"
         f"geq=r='{cols[0]}':g='{cols[1]}':b='{cols[2]}':"
-        f"a='alpha(X,{v})*({inside})*gte(T,{t_show:g})',{shift}[sglTX]",
+        f"a='alpha({u},{v})*({inside})*gte(T,{t_show:g})',{shift}[sglTX]",
     ]
-    layers = ["sglBG", "sglTX"]
+    layers = (["sglBG"] if show_banner else []) + ["sglTX"]
     if chev:
         chev_fc, ch_lab = chevron_layer_filters(
             "sglC0", "sgl", x0 + CHEV_INSET,
@@ -691,6 +733,76 @@ def result_single_layer_filters(src, res_start, result_y, lay, rel, rgb, chev=Fa
         filters += chev_fc
         layers.append(ch_lab)
     return filters, layers, band_top
+
+
+def ring_layer_height():
+    """円形「GOAL!!」レイヤーの高さ（円の直径＋余白。偶数）"""
+    h = 2 * RING_RADIUS + 8
+    return h + h % 2
+
+
+def single_ring_layer_filter(src, dst, res_start, lay):
+    """1色のときバナーの後ろに出す「GOAL!!」の中抜き文字レイヤー（1080 x ring_layer_height()）。
+    文字は円の中だけに表示し、円からはみ出す外側の段は輪郭線を少し太くする。円は小さい状態で RING_HOLD 秒
+    止まってから広がり、その間に各段が左右交互に動いて止まる。広がりきったら全段が上へ動いて止まり、色名の拡大と
+    同時に少し縮みながらさらに上へ動いて止まる（どれもループし、縮んで空いた所も文字で埋まる）。
+    lay: RING_TEXT を RING_FONTSIZE で実測したもの / 戻り値: (フィルタ列, 重ねる画面Y の相対量)"""
+    h = ring_layer_height()
+    cy = h / 2
+    ink_l, ink_r = lay["bands"][0][0], lay["bands"][-1][1]
+    # 上へ流してループさせるため、元絵には中央の段（偶数段）と1つ下の段（奇数段）の2段だけを描き、
+    # 縦に 2段ぶんの周期で繰り返して拾う（左右の向きは段の偶奇で決まるので2段周期でつながる）。
+    pitch = RING_ROW_PITCH
+    ys = [round(cy + k * pitch - (lay["y1"] + lay["y2"]) / 2) for k in (0, 1)]   # インク中心がその段に来る描画Y
+    base = f"fontfile={FONT_REL}:text={RING_TEXT}:fontsize={RING_FONTSIZE}:fontcolor=white:x={lay['x']}"
+
+    def draw(sw=0):
+        extra = f":borderw={sw}:bordercolor=white" if sw else ""
+        return ",".join(f"drawtext={base}:y={y}{extra}" for y in ys)
+
+    p = f"clip((T-{RING_HOLD:g})/{RING_GROW:g},0,1)"                # 小さいまま RING_HOLD 秒止まってから広がる
+    ease = f"(1-pow(1-{p},{RING_GROW_EASE:g}))"                     # 0→1。最初速く、だんだんゆっくり
+    scale = f"({RING_SCALE_FROM:g}+{1 - RING_SCALE_FROM:g}*{ease})"  # 大きさ RING_SCALE_FROM→1
+    q = f"clip((T-{RING_HOLD + RING_GROW:g})/{SINGLE_RISE:g},0,1)"   # 広がりきってから色名と同時に上へ動く
+    # 色名が拡大し始めると同時に（＝バナーが出始める）文字を縮めながらさらに上へ動かし、バナーが出きると同時に止める
+    t2 = RING_HOLD + RING_GROW + SINGLE_RISE
+    e2 = f"(1-pow(1-clip((T-{t2:g})/{RESULT_GROW:g},0,1),{SINGLE_RISE_EASE:g}))"
+    rise = (f"({RING_RISE_DIST:g}*(1-pow(1-{q},{SINGLE_RISE_EASE:g}))"   # どちらも最初速く、だんだんゆっくり止まる
+            f"+{RING_RISE2_DIST:g}*{e2})")
+    z = f"(1-{1 - RING_SHRINK:g}*{e2})"                              # 文字の大きさ 1→RING_SHRINK
+    # 各段を左右交互に動かす（中央の段が右、1つ外側ごとに向きが反転。円の広がりと同じ減速で動いて止まる）。
+    # 1段に1つだけ描いた「GOAL!!」を周期 period で横に繰り返して拾うので、円の端から出た文字は反対側の端から現れる。
+    period = (ink_r - ink_l) + RING_SCROLL_GAP
+    x_left = ink_l - RING_SCROLL_GAP / 2                           # 1周期ぶんの左端（文字の左に余白の半分）
+    v_top = cy - pitch / 2                                         # 縦の1周期（2段ぶん）の上端
+    # 輪郭線の太さ：段の中心が円の中心から離れるほど太い線に切り替える（はみ出す外側の段＝太い）。
+    # 流れている途中で急に変わらないよう、1.25段〜1.75段の間でなめらかに入れ替える
+    w = f"clip((abs(ld(3))*ld(4)-{1.25 * pitch:g})/{0.5 * pitch:g},0,1)"
+    circle = f"clip({RING_RADIUS}*{scale}-hypot(X-540,Y-{cy:g})+0.5,0,1)"   # 円の外は表示しない。縁は約1pxぼかす
+    # 縮小は画面の(X,Y)を縮小率で割り戻して拾う（中心から縮む）。元絵を縦横に繰り返して拾っているので、
+    # 縮んで空いた所にも隣の「GOAL!!」が入り、円の中は文字で埋まったままになる
+    sx, sy = f"(540+(X-540)/ld(4))", f"({cy:g}+(Y-{cy:g})/ld(4))"
+    pick = (f"st(4,{z});"                                                                # 文字の縮小率
+            f"st(0,{v_top:g}+mod({sy}+{rise}-{v_top:g},{2 * pitch}));"                  # 元絵の縦座標
+            f"st(1,floor((ld(0)-{cy:g})/{pitch}+0.5));"                                # 元絵の段（0 か 1）
+            f"st(2,{x_left:g}+mod({sx}-{x_left:g}-cos(PI*ld(1))*{period * RING_SCROLL_LOOPS:g}*{ease},{period:g}));"
+            f"st(3,({sy}-{cy:g})-(ld(0)-{cy:g}-ld(1)*{pitch}));")                       # 段の中心の縦距離（元絵の単位）
+
+    def outline(tag, sw, weight):
+        # MARBLE と同じく「縁取りあり − 縁取りなし」で輪郭線だけを残す（blend は gbrap で行う）
+        return (f"[{dst}{tag}o0]{draw(sw)},format=gbrap[{dst}{tag}o];"
+                f"[{dst}{tag}f0]{draw()},format=gbrap[{dst}{tag}f];"
+                f"[{dst}{tag}o][{dst}{tag}f]blend=c0_expr='0':c1_expr='0':c2_expr='0':c3_expr='max(A-B,0)',"
+                f"format=rgba,geq=r=255:g=255:b=255:a='{pick}alpha(ld(2),ld(0))*{weight}*{circle}',"
+                f"format=gbrap[{dst}{tag}];")
+    filters = (
+        f"[{src}]format=rgba,colorchannelmixer=aa=0,split=4[{dst}no0][{dst}nf0][{dst}ko0][{dst}kf0];"
+        + outline("n", RING_STROKE, f"(1-{w})")
+        + outline("k", RING_STROKE_CUT, w)
+        # 細い線と太い線を重ねる（色は白、不透明度は「重ね塗り」で合成）
+        + f"[{dst}n][{dst}k]blend=c0_expr='255':c1_expr='255':c2_expr='255':c3_expr='A+B-A*B/255',"
+        f"format=rgba,setpts=PTS-STARTPTS+{res_start:g}/TB[{dst}]")
+    return filters, -round(cy)
 
 
 def measure_eng_bands(text, fontsize, tmp_txt):
@@ -992,10 +1104,38 @@ def cmd_finalize(args):
         goal_measure = OUTPUT_DIR / f"{stamp}_goal_measure.txt"
         temp_files += [goal_txt, goal_measure]
         goal_rel = goal_txt.relative_to(PROJECT_ROOT).as_posix()
-        goal_layout = measure_eng_bands(goal_text, GOAL_FONTSIZE, goal_measure)
+        if single_mode:
+            # 1色の色名：拡大しきった幅が SINGLE_MAX_W に収まるまで文字サイズを縮めて測り直す
+            # （画面幅を超えると実測でも右端が切れて短めに出るので、数回くり返して詰める）
+            fs = SINGLE_FONTSIZE
+            for _ in range(4):
+                goal_layout = measure_eng_bands(goal_text, fs, goal_measure)
+                if goal_layout is None:
+                    break
+                ink_w = goal_layout["bands"][-1][1] - goal_layout["bands"][0][0]
+                if ink_w * SINGLE_ZOOM <= SINGLE_MAX_W:
+                    break
+                fs = int(fs * SINGLE_MAX_W / (ink_w * SINGLE_ZOOM))
+            if goal_layout is not None:
+                goal_layout["fontsize"] = fs
+        else:
+            goal_layout = measure_eng_bands(goal_text, GOAL_FONTSIZE, goal_measure)
         if goal_layout is None:
             print(f"[edit] 注意: 「{goal_text}」の実測に失敗したため結果バナーを出しません。")
             res_start = None
+    # 1色のとき：バナーの後ろに円形に切り抜いた「GOAL!!」を出す（位置合わせ用に実測）
+    ring_idx = ring_layout = None
+    if res_start is not None and single_mode:
+        ring_measure = OUTPUT_DIR / f"{stamp}_ring_measure.txt"
+        temp_files.append(ring_measure)
+        ring_layout = measure_eng_bands(RING_TEXT, RING_FONTSIZE, ring_measure)
+        if ring_layout is None:
+            print(f"[edit] 注意: 「{RING_TEXT}」の実測に失敗したため円形の文字を省きます。")
+        else:
+            inputs += ["-f", "lavfi", "-i",
+                       f"color=c=black@0.0:s=1080x{ring_layer_height()}:r=30:d={clip_len - res_start:.3f}"]
+            ring_idx = next_idx
+            next_idx += 1
     # 英語字幕：1文字ずつ縦長→元サイズに戻すアニメのため、各文字の帯を実測する
     measure_txt = OUTPUT_DIR / f"{stamp}_measure.txt"
     temp_files.append(measure_txt)
@@ -1188,13 +1328,22 @@ def cmd_finalize(args):
     # 結果：背景バナー（黄/黒の点滅＋下から上へ広がる）と、その中央の「GOAL！！」
     if res_idx is not None and goal_layout is not None:
         if single_mode:
+            # 円形の「GOAL!!」があるときは、円が広がりきって文字が上へ流れ始めると同時に色名を出す
+            text_start = RING_HOLD + RING_GROW if ring_idx is not None else RESULT_GROW
             res_fc, res_layers, band_top = result_single_layer_filters(
-                f"{res_idx}:v", res_start, args.result_y, goal_layout, goal_rel, goal_base_rgb)
+                f"{res_idx}:v", res_start, args.result_y, goal_layout, goal_rel, goal_base_rgb,
+                show_banner=SINGLE_SHOW_BANNER, text_start=text_start)
         else:
             res_fc, res_layers, band_top = result_layer_filters(
                 f"{res_idx}:v", res_start, args.result_y, goal_layout, goal_rel, res_labels,
                 goal_move_idx, goal_base_rgb, goal_flash_rgb, chev_cfg)
         win = f"gte(t,{res_start:g})"
+        if ring_idx is not None:
+            # 円形の「GOAL!!」はバナーより後ろ（先に重ねる）。円の中心をバナー中心に合わせる
+            ring_fc, ring_dy = single_ring_layer_filter(f"{ring_idx}:v", "ring", res_start, ring_layout)
+            chain.append(ring_fc)
+            chain.append(f"[{cur}][ring]overlay=0:{round(args.result_y) + ring_dy}:enable='{win}'[vring]")
+            cur = "vring"
         chain += res_fc
         for i, lab in enumerate(res_layers):
             nxt = f"vres{i}"
