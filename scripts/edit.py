@@ -32,8 +32,8 @@ SE_DIR = PROJECT_ROOT / "se"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 ASSETS_DIR = PROJECT_ROOT / "assets"  # 再利用するオーバーレイ動画（購読ボタン・Thank you等）
 # drawtext はプロジェクトルート起点の相対パスで渡す（Windowsのドライブ文字対策）
-FONT_REL = "fonts/CherryBombOne-Regular.ttf"   # 既定フォント（英字・かな。漢字グリフは持たない）
-FONT_KANJI_REL = "fonts/NotoSansJP.ttf"        # 漢字を含むテキスト用（煽り「何色が入る？？」）
+FONT_REL = "fonts/MPLUS1p-ExtraBold.ttf"       # 動画内の文字のフォント（日本語・英語とも）
+FONT_SUB_REL = "fonts/MPLUS1p-Bold.ttf"        # 英語字幕だけ少し細くする
 
 # テキスト（イメージ動画 026_N016 準拠）
 AORI_TEXT = "何色が入る？？"
@@ -59,12 +59,12 @@ RESULT_BANNER_MIN_H = 6          # 出始めの潰れた高さ
 RESULT_GROW = 0.3                # 高さが広がりきるまでの秒数
 RESULT_FLASH_END = 0.3           # 黄→黒→黄→黒の点滅が終わる秒数（以降は黒）
 RESULT_Y_DEFAULT = 560           # バナー中心の縦位置（画面中央960より上。バナー3個分）
-RESULT_BAND_PAD = 100            # 帯レイヤーをバナーの上下に広げる余白（当たり色の文字ぶん）
-RESULT_LABEL_FONTSIZE = 110      # 当たりの穴に入った玉の色を示す文字の大きさ
+RESULT_BAND_PAD = 120            # 帯レイヤーをバナーの上下に広げる余白（当たり色の文字ぶん）
+RESULT_LABEL_FONTSIZE = 140      # 当たりの穴に入った玉の色を示す文字の大きさ
 RESULT_LABEL_REVEAL = 0.3        # 当たり色の文字が生えきるまでの秒数
 RESULT_LABEL_GAP = 4             # バナーの縁と当たり色の文字のすき間
 # 当たりが1色だけのとき（バナーは上から下へ伸び、色名は下から上へ出現して短く点滅）
-SINGLE_FONTSIZE = 225            # 色名の文字サイズ（インク高さ約158px）
+SINGLE_FONTSIZE = 225            # 色名の文字サイズ（インク高さ約167px）
 SINGLE_MAX_W = 1040              # 拡大しきった色名の幅の上限px。超える長い色名（LIGHT BLUE 等）は文字サイズを自動で縮める
 SINGLE_RISE = 0.5                # 色名が下から上へ出現しきるまでの秒数（円形「GOAL!!」の上への移動も同じ秒数で止まる）
 SINGLE_RISE_EASE = 4             # 出現の減速の強さ（大きいほど最初速く、だんだんゆっくり）
@@ -76,7 +76,7 @@ SINGLE_BANNER_PAD_Y = 20         # バナーの上下の余白px（拡大しき�
 SINGLE_BANNER_PAD_X = 40         # 色名がバナー幅（RESULT_BANNER_W）より広いときの左右の余白px
 # 1色のときバナーの後ろに出す、円形に切り抜いた「GOAL!!」の中抜き文字（円は中央から広がる）
 RING_TEXT = "GOAL!!"
-RING_FONTSIZE = 200              # インク幅約660px・高さ約138px
+RING_FONTSIZE = 187              # インク幅約660px・高さ約140px
 RING_RADIUS = 420                # 広がりきった円の半径px（中心はバナー中心）
 RING_ROW_PITCH = 160             # 段の縦ピッチ
 RING_STROKE = 2                  # 輪郭線の太さ（円の内側に収まる段）
@@ -110,7 +110,7 @@ CHEV_STEP = 0.07                 # 1段階のなかで左から1つずつずら�
 CHEV_TRANS = 0.15                # 1つぶんの色変化にかける秒数
 # バナー中央の「GOAL!GOAL!GOAL!」（白・奥から手前へ拡大・真ん中の「GOAL!」だけ上にずれて見切れた状態から下りてくる）
 GOAL_TEXT = "GOAL!GOAL!GOAL!"
-GOAL_FONTSIZE = 90               # 全体幅809px・高さ62px（バナー900x130pxに収まる）
+GOAL_FONTSIZE = 82               # 全体幅約808px・高さ約62px（バナー900x130pxに収まる）
 GOAL_ZOOM_FROM = 0.2             # 奥にいるときの大きさ（原寸比）
 GOAL_ZOOM_MID = 0.5              # 一旦止まる大きさ
 GOAL_ZOOM1_DUR = 0.4             # 奥→半分の大きさまでの秒数
@@ -395,6 +395,8 @@ def parse_result_colors(stem):
 
 
 CARD_W, CARD_H = 400, 116        # 高さは基準96の約1.2倍
+CARD_TEXT_PAD_X = 24             # ピルの左右に残す余白px（英語文字の大きさの上限を決める）
+CARD_TEXT_PAD_Y = 14             # ピルの上下に残す余白px（同上）
 CARD_LINE_EXT = 24               # 白線をピルより左右に伸ばす量（片側12px）
 CARD_MARGIN = 76                 # 1カード内のピル下〜次カードまでの余白（白線+ふりがな+マージン）
 CARD_ROW_PITCH = CARD_H + CARD_MARGIN   # 行の縦ピッチ（ピル高に連動）
@@ -418,6 +420,23 @@ def card_layer_height(n):
     return h + (h % 2)
 
 
+def card_label_fontsize(colors, measure_txt):
+    """カードの英語文字の大きさを決める。一番幅の広い色名がピルの内側に収まる最大の大きさを、実測から求める。"""
+    base = 100
+    fit = None
+    for ck in colors:
+        if ck not in COLOR_MAP:
+            continue
+        lay = measure_eng_bands(COLOR_MAP[ck][0], base, measure_txt)
+        if lay is None:
+            continue
+        ink_w = lay["bands"][-1][1] - lay["bands"][0][0]
+        ink_h = lay["y2"] - lay["y1"] + 1
+        size = base * min((CARD_W - 2 * CARD_TEXT_PAD_X) / ink_w, (CARD_H - 2 * CARD_TEXT_PAD_Y) / ink_h)
+        fit = size if fit is None else min(fit, size)
+    return int(fit) if fit else 60
+
+
 def build_color_card_layers(colors, la, lb, lc, stamp, temp_files):
     """色カードを3つの透明レイヤーに描く（表示順に対応）。
     la=白線＋ふりがな層、lb=ピル層、lc=英語ラベル層。
@@ -428,7 +447,10 @@ def build_color_card_layers(colors, la, lb, lc, stamp, temp_files):
     cols_x = [118, 562]          # 2列のX座標
     center_x = (1080 - card_w) // 2
     top, row_pitch = CARD_TOP, CARD_ROW_PITCH
-    en_size, furi_size = 52, 30
+    # 英語文字：その動画のカードで一番幅の広い色名がピルいっぱいになる大きさに、全カードをそろえる
+    measure_txt = OUTPUT_DIR / f"{stamp}_card_measure.txt"
+    temp_files.append(measure_txt)
+    en_size, furi_size = card_label_fontsize(colors, measure_txt), 30
     line_ext = CARD_LINE_EXT
     filters = []
     boxes = []
@@ -541,7 +563,7 @@ def eng_layer_filter(src, dst, exprs, draw_x, draw_y, text_rel, offset=0.0):
     # ブラー版はアルファが薄まるため補正倍率で戻す（しないと不透明度が「フェード×ブラー減衰」の
     # 二重掛けになり、フェードが終わっても透けて見える）。フェードはブレンド後に一度だけ掛ける。
     return (f"[{src}]format=rgba,colorchannelmixer=aa=0,"
-            f"drawtext=fontfile={FONT_REL}:textfile={text_rel}:fontcolor=white:"
+            f"drawtext=fontfile={FONT_SUB_REL}:textfile={text_rel}:fontcolor=white:"
             f"fontsize={ENG_FONTSIZE}:x={draw_x}:y={draw_y:g},"
             f"geq=r='r(X,{ys})':g='g(X,{ys})':b='b(X,{ys})':"
             f"a='alpha(X,{ys})',split=3[{dst}S][{dst}B0][{dst}O0];"
@@ -713,7 +735,9 @@ def result_layer_filters(src, res_start, result_y, goal_layout, goal_rel, labels
             draws.append(f"drawtext=fontfile={FONT_REL}:textfile={lb['rel']}:"
                          f"fontcolor={lb['color']}:fontsize={RESULT_LABEL_FONTSIZE}:x={dx:g}:y={dy:g}")
             shift_x = dx - lay["x"]
-            sel = f"gte(X,{ink_l + shift_x - 4:g})*lt(X,{ink_r + shift_x + 4:g})"
+            # 上の色名はバナー中心より上、下の色名は下だけを動かす（横位置が重なる2語の動きが打ち消し合わないように）
+            half = f"lt(Y,{cyb:g})" if i == 0 else f"gte(Y,{cyb:g})"
+            sel = f"gte(X,{ink_l + shift_x - 4:g})*lt(X,{ink_r + shift_x + 4:g})*{half}"
             moves.append(f"{sign}({sel})*{move:g}*(1-{ease})")
         v = "Y" + "".join(moves)
         draws_str = ",".join(draws)
@@ -866,7 +890,7 @@ def single_ring_layer_filter(src, dst, res_start, lay):
     return filters, -round(cy)
 
 
-def measure_eng_bands(text, fontsize, tmp_txt):
+def measure_eng_bands(text, fontsize, tmp_txt, font=FONT_REL):
     """英語字幕を1フレーム描画して実測し、各文字の帯（X範囲）とインクbboxを得る。
     drawtextは文字幅を教えてくれないため、prefixを順に描いて右端インク位置を測る。
     戻り値: {"x": 描画X, "bands": [(左,右), ...], "y1","y2": インクの上下（描画y基準の相対）}"""
@@ -877,7 +901,7 @@ def measure_eng_bands(text, fontsize, tmp_txt):
         tmp_txt.write_text(sub, encoding="utf-8")
         proc = subprocess.run(
             ["ffmpeg", "-v", "error", "-f", "lavfi", "-i", f"color=black:s={W}x{H}",
-             "-vf", f"drawtext=fontfile={FONT_REL}:textfile={rel}:fontcolor=white:"
+             "-vf", f"drawtext=fontfile={font}:textfile={rel}:fontcolor=white:"
                     f"fontsize={fontsize}:x=0:y={YY}",
              "-frames:v", "1", "-pix_fmt", "gray", "-f", "rawvideo", "-"],
             cwd=PROJECT_ROOT, capture_output=True)
@@ -983,7 +1007,7 @@ def cmd_finalize(args):
     if not 15 <= clip_len <= 35:
         print(f"[edit] 注意: 切り出し尺が {clip_len:.1f} 秒です（目安は20〜30秒）。意図した区間か確認してください。")
 
-    for rel in (FONT_REL, FONT_KANJI_REL):
+    for rel in (FONT_REL, FONT_SUB_REL):
         if not (PROJECT_ROOT / rel).exists():
             print(f"[edit] フォントが見つかりません: {rel}", file=sys.stderr)
             sys.exit(1)
@@ -1201,7 +1225,7 @@ def cmd_finalize(args):
     measure_txt = OUTPUT_DIR / f"{stamp}_measure.txt"
     temp_files.append(measure_txt)
     print("[edit] 英語字幕の文字位置を実測中…")
-    eng_layout = measure_eng_bands(ENGLISH_SUBTITLE, ENG_FONTSIZE, measure_txt)
+    eng_layout = measure_eng_bands(ENGLISH_SUBTITLE, ENG_FONTSIZE, measure_txt, FONT_SUB_REL)
     if eng_layout is None:
         print("[edit] 注意: 英語字幕の実測に失敗したためアニメなしで進めます。")
         eng_x, eng_anim = "(w-text_w)/2", None
@@ -1264,7 +1288,7 @@ def cmd_finalize(args):
         return ([f"[{src}]format=rgba,colorchannelmixer=aa=0,split=2[{prefix}BG0][{prefix}TX0]",
                  f"[{prefix}BG0]geq=r='{is_y}*241':g='{is_y}*196':b='{is_y}*15':"
                  f"a='if({inside},255,0)',{shift}[{prefix}BG]",
-                 f"[{prefix}TX0]drawtext=fontfile={FONT_KANJI_REL}:textfile={aori_rel}:"
+                 f"[{prefix}TX0]drawtext=fontfile={FONT_REL}:textfile={aori_rel}:"
                  f"fontcolor={args.aori_color}:fontsize=76:x=(w-text_w)/2:y={args.aori_y:g},"
                  f"geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='alpha(X,Y)*lte(Y,{tedge})',"
                  f"{shift}[{prefix}TX]"], ymove)
@@ -1289,7 +1313,7 @@ def cmd_finalize(args):
                      f"enable='between(t,0,{eng_main_end:g})'[v2]")
     else:
         chain.append(
-            f"[{base}]drawtext=fontfile={FONT_REL}:textfile={eng_rel}:fontcolor=white:"
+            f"[{base}]drawtext=fontfile={FONT_SUB_REL}:textfile={eng_rel}:fontcolor=white:"
             f"fontsize={ENG_FONTSIZE}:x={eng_x}:y={ENG_Y}:enable='between(t,0,{eng_main_end:g})'[v2]")
     cur = "v2"
     # 色選択肢カード：透明レイヤーに描き、geqの移動アルファマスクで左→右に「サイズが伸びる」表示。
@@ -1480,7 +1504,7 @@ def cmd_finalize(args):
             "本編（映像）を作成中")
         # 2) 導入クリップ（額縁＋英語字幕。英語字幕は最初から表示）
         #    ③は本編開始直前の素材にして本編へ継ぎ目なく連続させる
-        eng_dt = (f"drawtext=fontfile={FONT_REL}:textfile={eng_rel}:fontcolor=white:fontsize={ENG_FONTSIZE}:"
+        eng_dt = (f"drawtext=fontfile={FONT_SUB_REL}:textfile={eng_rel}:fontcolor=white:fontsize={ENG_FONTSIZE}:"
                   f"x={eng_x}:y={ENG_Y}")
         cuts = [("①弾が並ぶ", args.intro_lineup),
                 ("②ルーレット上で転がる", args.intro_rolling),

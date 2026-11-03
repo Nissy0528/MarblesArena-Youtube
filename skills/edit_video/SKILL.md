@@ -14,7 +14,7 @@ description: input/ の長尺録画（マーブルラン素材）から、額縁
 - `assets/` のオーバーレイ動画（再利用素材、著作権フリー）
   - SUBSCRIBEボタン：グリーンバック（例 `サブスクライブ素材｜英語・シンプル・Youtube.mp4`）
   - Thank you：黒背景の筆記体アニメ（例 `67183_1280x720.mp4`）
-- `fonts/NotoSansJP.ttf`（日本語フォント。可変フォントの場合はこの名前でコピーを用意）
+- `fonts/MPLUS1p-ExtraBold.ttf`・`fonts/MPLUS1p-Bold.ttf`（動画内の文字のフォント。Google Fonts の M PLUS 1p。git には含まれない）
 
 ## 完成形の構成（`input/026_N016` を目標に近似）
 - **額縁フレーム**：ゲーム映像を横幅約91%で中央配置、外周は同映像のぼかし＋暗め背景
@@ -69,7 +69,7 @@ description: input/ の長尺録画（マーブルラン素材）から、額縁
 
 ## エラー時の対処
 - **文字化け/`UnicodeEncodeError: cp932`** → `PYTHONUTF8=1 PYTHONIOENCODING=utf-8` を付けて実行
-- **フォントが見つからない** → `fonts/NotoSansJP.ttf` の存在を確認（可変フォントはこの名前でコピー）
+- **フォントが見つからない** → `fonts/MPLUS1p-ExtraBold.ttf`・`fonts/MPLUS1p-Bold.ttf` の存在を確認
 - **SUBSCRIBEに緑が残る** → `--sub-despill` を上げる／`--sub-similarity` を少し上げる
 - **SUBSCRIBEが半透明になる** → `--sub-similarity` を下げる（緑以外＝無彩色まで抜けている）
 - **オーバーレイが表示区間で出ない/尽きる** → `setpts` で頭出ししているのが前提。素材の尺 < 表示秒数なら `--sub-dur`/`--ty-dur` を縮める
