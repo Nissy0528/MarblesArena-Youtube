@@ -1,6 +1,6 @@
 ---
 name: edit_video
-description: input/ の長尺録画（マーブルラン素材）から、額縁フレーム＋日英テキスト＋SUBSCRIBE/Thank youオーバーレイ＋BGMのみ音声のYouTube Shorts（尺は可変、目安20〜30秒）を scripts/edit.py で半自動編集する。
+description: input/ の長尺録画（マーブルラン素材）から、額縁フレーム＋日英テキスト＋SUBSCRIBE/Thank youオーバーレイ＋元素材の音声＋BGMのYouTube Shorts（尺は可変、目安20〜30秒）を scripts/edit.py で半自動編集する。
 ---
 
 # 動画編集スキル（Marbles Arena / 予想系Shorts）
@@ -21,7 +21,7 @@ description: input/ の長尺録画（マーブルラン素材）から、額縁
 - **日英テキスト（導入0〜4秒）**：上部に煽り「何色が入る？？」（黒帯・ピンク）、下部に英語字幕「Which ball color goes into the goal?」（白）
 - **SUBSCRIBEオーバーレイ**：レース中盤に数秒、下部に合成（グリーンバックをクロマキー＋despillで抜く）
 - **Thank youオーバーレイ**：SUBSCRIBEの直後、SUBSCRIBEと同じ高さに合成（黒背景をcolorkeyで抜く）
-- **音声：元素材はミュートし、BGMのみ**（volume=0.5基準）
+- **音声：元素材の音声とBGMを重ねる**（BGM volume=0.5、元素材 volume=1.5 基準）
 - 尺は可変（目安20〜30秒）。球が動き出してから結果が出るまでの実時間に合わせる
 
 ## 実行環境の注意
@@ -51,7 +51,7 @@ description: input/ の長尺録画（マーブルラン素材）から、額縁
 3. 日英 `drawtext`（textfile経由でエスケープ回避。表示区間は `enable='between(t,0,4)'`）
 4. SUBSCRIBE：`chromakey`（緑抜き）＋`despill`（緑スピル除去）＋`scale`＋`setpts=PTS-STARTPTS+開始/TB`（表示区間の頭から再生）→ `overlay`（`enable` で区間指定）
 5. Thank you：`colorkey`（黒抜き）＋`scale`＋`setpts`（同上）→ `overlay`（SUBSCRIBEと同じ垂直中心）
-6. 音声：`[bgm]volume=0.5,atrim=0:尺,asetpts` のみを `-map`（元素材の音声は使わない＝ミュート）
+6. 音声：元素材の音声（`volume=1.5`）と `[bgm]volume=0.5,atrim=0:尺,asetpts` を `amix=normalize=0` で重ねて `-map`
 7. `libx264 -crf 20 -preset medium` / `aac 44100 128k` / `+faststart`
 
 ## 主なオプション（調整用、既定値）
@@ -64,7 +64,7 @@ description: input/ の長尺録画（マーブルラン素材）から、額縁
 - `--ty-start`（既定：SUBSCRIBE直後）`--ty-dur 4`：Thank youの表示開始・秒数
 - `--subscribe / --thankyou`：オーバーレイ素材のパス（省略時は assets/→input/ から自動検出）
 - `--no-subscribe / --no-thankyou`：各オーバーレイを入れない
-- `--bgm`（省略時 bgm/ 自動選択）`--bgm-volume 0.5`
+- `--bgm`（省略時 bgm/ 自動選択）`--bgm-volume 0.5` `--src-volume 1.5`（0でミュート） `--se-volume 1.0` `--goal-times 19.97,20.27`（当たりの穴に玉が入る再生時刻。映像で確認して指定）
 - `--keep-temp`：中間テキストを残す
 
 ## エラー時の対処
@@ -73,5 +73,5 @@ description: input/ の長尺録画（マーブルラン素材）から、額縁
 - **SUBSCRIBEに緑が残る** → `--sub-despill` を上げる／`--sub-similarity` を少し上げる
 - **SUBSCRIBEが半透明になる** → `--sub-similarity` を下げる（緑以外＝無彩色まで抜けている）
 - **オーバーレイが表示区間で出ない/尽きる** → `setpts` で頭出ししているのが前提。素材の尺 < 表示秒数なら `--sub-dur`/`--ty-dur` を縮める
-- **音がしない/BGMが小さい** → 元素材はミュート仕様。BGMは `--bgm-volume` で調整
+- **音量のバランスが悪い** → 元素材は `--src-volume`、BGMは `--bgm-volume` で調整
 - **見どころ区間がずれる** → `preview --start` の候補を変えて再確認してから finalize
