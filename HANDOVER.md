@@ -29,7 +29,7 @@ PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python scripts/edit.py finalize \
 | 16.74〜20.74秒 | Thank you |
 | 22.72秒〜最後 | 結果表示（バナー＋色名＋「＞＞＞」）。開始時刻は `--result-start` で指定 |
 
-音声はBGMのみ（元素材はミュート）。
+音声は元素材の音声＋BGM（`--src-volume` 既定1.5、`--bgm-volume` 既定0.5）。
 
 ## 3. 結果表示の3パターン
 

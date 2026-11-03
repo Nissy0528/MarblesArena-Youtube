@@ -28,6 +28,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 INPUT_DIR = PROJECT_ROOT / "input"
 BGM_DIR = PROJECT_ROOT / "bgm"
+SE_DIR = PROJECT_ROOT / "se"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 ASSETS_DIR = PROJECT_ROOT / "assets"  # 再利用するオーバーレイ動画（購読ボタン・Thank you等）
 # drawtext はプロジェクトルート起点の相対パスで渡す（Windowsのドライブ文字対策）
@@ -139,6 +140,19 @@ ENG_OUT_BLUR = 40.0              # 退場：消えるときのブラー強さ（
 ENG_OUT_BLUR_GAIN = 4.0          # 退場：ブラー版のアルファ補正（σ40で濃さ約25%→元の濃さに戻す）
 ENG_OUT_BLUR_RAMP = 0.35         # 退場：1文字の消え始めからこの比率でブラーを強め切る（フェードより先）
 
+SRC_VOLUME_DEFAULT = 1.5         # 素材の音声の音量。素材はBGMより約25dB小さい（平均-36dB）ため持ち上げて重ねる
+AUDIO_CUT_FADE = 0.01            # 導入のカットが飛ぶ所で素材の音声にかける短いフェード秒数（プツッという音を防ぐ）
+# 導入の各カットの頭で鳴らす効果音（①②③の順。se/ のファイル名）
+INTRO_SE = ("拍子木1＿効果音ラボ.mp3", "拍子木1＿効果音ラボ.mp3", "拍子木2＿効果音ラボ.mp3")
+# 購読ボタンの効果音：(se/ のファイル名, 素材の秒数)。秒数はボタンの見た目が切り替わるコマを実測した値
+SUBSCRIBE_SE = (("スイッチを押す.mp3", 1.134),         # グッドボタン
+                ("se_GoldKugiGenerate.mp3", 2.069),   # SUBSCRIBE
+                ("スイッチを押す.mp3", 3.003))         # ベルマーク
+GOAL_SE = "se_NumaIn.wav"        # 当たりの穴に玉が入る瞬間の効果音（--goal-times の各時刻で鳴らす）
+GOAL_SE_GAIN = 0.5               # GOAL_SE だけの音量倍率。鳴り始めから音が大きく、等倍だとAAC圧縮後にピークが0dBを超えるため
+AUDIO_LIMIT = 0.85               # 全部を重ねた後のピークの上限（音割れ防止。超える瞬間だけ抑える。AAC圧縮でピークが跳ねるので余裕を持たせる）
+RESULT_SE_START = "和太鼓でドドン＿効果音ラボ.mp3"   # 結果表示の開始で鳴らす効果音
+RESULT_SE_COLOR = "シーン切り替え2.mp3"              # 当たりの色名が出始める瞬間に鳴らす効果音
 BGM_EXTS = (".mp3", ".wav", ".m4a", ".aac", ".ogg")
 PREVIEW_TAIL_SECONDS = 30.0  # 仮切り出しの初期ルール: 末尾から30秒
 
@@ -225,6 +239,53 @@ def probe(path):
         "height": stream["height"],
         "fps": float(num) / float(den),
     }
+
+
+def has_audio(path):
+    """素材に音声ストリームがあるかを返す。"""
+    proc = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=index",
+         "-of", "csv=p=0", str(path)],
+        cwd=PROJECT_ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    return bool(proc.stdout.strip())
+
+
+def mix_audio_filter(src_chains, bgm_idx, dur, bgm_volume, src_volume, se_chains=()):
+    """素材の音声（src_chains を順に連結）・BGM・効果音（se_chains）を重ねて [aout] を作るフィルタ列を返す。
+    素材の音声も効果音もなければBGMだけにする。"""
+    bgm = f"[{bgm_idx}:a]volume={bgm_volume},atrim=0:{dur:.3f},asetpts=PTS-STARTPTS"
+    if not src_chains and not se_chains:
+        return f"{bgm}[aout]"
+    fmt = "aresample=44100,aformat=channel_layouts=stereo"
+    parts = [f"{bgm},{fmt}[bgmMix]"]
+    mix = ["bgmMix"]
+    if src_chains:
+        labels = [f"srcA{i}" for i in range(len(src_chains))]
+        parts += [f"{chain}[{lab}]" for chain, lab in zip(src_chains, labels)]
+        joined = "".join(f"[{lab}]" for lab in labels)
+        parts.append(f"{joined}concat=n={len(labels)}:v=0:a=1,volume={src_volume},{fmt}[srcMix]")
+        mix.append("srcMix")
+    for i, chain in enumerate(se_chains):
+        parts.append(f"{chain},{fmt}[seMix{i}]")
+        mix.append(f"seMix{i}")
+    # normalize=0：重ねても音量を自動で下げない（volume の指定どおりに鳴らす）
+    joined = "".join(f"[{lab}]" for lab in mix)
+    parts.append(f"{joined}amix=inputs={len(mix)}:duration=first:normalize=0,"
+                 f"alimiter=limit={AUDIO_LIMIT}:level=disabled:latency=1[aout]")
+    return ";".join(parts)
+
+
+def se_audio_inputs(items, first_idx, volume):
+    """効果音 (se/ のファイル名, 鳴らす秒[, 音量倍率]) の列から、ffmpeg の入力と mix_audio_filter 用のフィルタ列を作る。"""
+    inputs, chains = [], []
+    for name, at, *gain in items:
+        se_path = SE_DIR / name
+        if not se_path.exists():
+            print(f"[edit] 注意: 効果音 {name} が se/ にないため省きます。")
+            continue
+        inputs += ["-i", str(se_path)]
+        chains.append(f"[{first_idx + len(chains)}:a]volume={volume * (gain[0] if gain else 1):g},adelay={round(at * 1000)}:all=1")
+    return inputs, chains
 
 
 def resolve_input(name):
@@ -1361,20 +1422,54 @@ def cmd_finalize(args):
             f"[{out_label}bg][{out_label}fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p,setsar=1[{out_label}]"
         )
 
+    use_src_audio = args.src_volume > 0 and has_audio(path)
+    if args.src_volume > 0 and not use_src_audio:
+        print("[edit] 注意: 素材に音声がないためBGMだけを乗せます。")
+    audio_desc = (f"素材の音声（volume={args.src_volume}）＋BGM（volume={args.bgm_volume}）"
+                  if use_src_audio else f"BGMのみ（volume={args.bgm_volume}）")
+
+    # 購読ボタンの効果音を鳴らす時刻（再生時間基準）。表示が終わった後の分は鳴らさない
+    subscribe_se = []
+    if sub_idx is not None:
+        for name, asset_t in SUBSCRIBE_SE:
+            at = sub_start + asset_t - args.sub_lead
+            if at < sub_end:
+                subscribe_se.append((name, intro_len + at))
+
+    # 当たりの穴に玉が入る瞬間の効果音（再生時間基準。人が映像で確認した時刻を --goal-times で指定する）
+    goal_se = []
+    if args.goal_times:
+        goal_se = [(GOAL_SE, float(t), GOAL_SE_GAIN) for t in args.goal_times.split(",") if t.strip()]
+
+    # 結果表示の効果音（再生時間基準）：表示の開始と、当たりの色名が出始める瞬間
+    result_se = []
+    if res_start is not None:
+        result_se.append((RESULT_SE_START, intro_len + res_start))
+        if single_mode:
+            color_t = RING_HOLD + RING_GROW if ring_idx is not None else RESULT_GROW
+        elif res_labels:
+            color_t = GOAL_ZOOM1_DUR + GOAL_HOLD + RESULT_GROW
+        else:
+            color_t = None
+        if color_t is not None:
+            result_se.append((RESULT_SE_COLOR, intro_len + res_start + color_t))
+
     if not args.intro:
-        # 音声: 元素材はミュートし、BGMのみを尺に合わせて乗せる
-        chain.append(f"[1:a]volume={args.bgm_volume},atrim=0:{clip_len:.3f},asetpts=PTS-STARTPTS[aout]")
+        # 音声: 素材の音声・BGM・効果音を尺に合わせて重ねる
+        src_chains = ["[0:a]asetpts=PTS-STARTPTS"] if use_src_audio else []
+        se_inputs, se_chains = se_audio_inputs(subscribe_se + goal_se + result_se, next_idx, args.se_volume)
+        chain.append(mix_audio_filter(src_chains, 1, clip_len, args.bgm_volume, args.src_volume, se_chains))
         run_ffmpeg(
-            ["ffmpeg", "-y", *inputs,
+            ["ffmpeg", "-y", *inputs, *se_inputs,
              "-filter_complex", ";".join(chain),
              "-map", f"[{cur}]", "-map", "[aout]",
              "-c:v", "libx264", "-preset", "medium", "-crf", "20",
              "-c:a", "aac", "-ar", "44100", "-b:a", "128k",
              "-movflags", "+faststart",
              str(final_path)],
-            f"本編集中（額縁＋日英テキスト＋オーバーレイ合成、音声はBGMのみ volume={args.bgm_volume}）")
+            f"本編集中（額縁＋日英テキスト＋オーバーレイ合成、音声は{audio_desc}）")
     else:
-        # 導入演出あり：①並ぶ→②転がる→③並ぶ を本編の前に連結し、BGMは全体に乗せる
+        # 導入演出あり：①並ぶ→②転がる→③並ぶ を本編の前に連結し、素材の音声とBGMを全体に乗せる
         # 1) 本編（映像のみ）。concat互換のため yuv420p/SAR=1 に正規化
         main_tmp = OUTPUT_DIR / f"{stamp}_main.mp4"
         temp_files.append(main_tmp)
@@ -1430,7 +1525,7 @@ def cmd_finalize(args):
                  "-map", f"[{out_label}]", "-an", *venc, str(it)],
                 f"導入クリップ作成中（{label} / 素材{cut_start:g}秒から{args.intro_dur:g}秒）")
             intro_tmps.append(it)
-        # 3) 連結（導入→本編）＋ BGMを全体に合成
+        # 3) 連結（導入→本編）＋ 素材の音声とBGMを全体に合成
         seg_paths = intro_tmps + [main_tmp]
         total = args.intro_dur * len(intro_tmps) + clip_len
         concat_inputs = []
@@ -1438,16 +1533,34 @@ def cmd_finalize(args):
             concat_inputs += ["-i", str(p)]
         bgm_idx = len(seg_paths)
         concat_v = "".join(f"[{i}:v]" for i in range(len(seg_paths))) + f"concat=n={len(seg_paths)}:v=1:a=0[outv]"
-        afilt = f"[{bgm_idx}:a]volume={args.bgm_volume},atrim=0:{total:.3f},asetpts=PTS-STARTPTS[aout]"
+        # 素材の音声は映像と同じ区間から取る。カットが飛ぶ所はプツッと鳴らないよう短くフェードする
+        # （③→本編は素材が連続しているのでフェードしない）
+        src_inputs, src_chains = [], []
+        if use_src_audio:
+            for i, (_label, cut_start) in enumerate(cuts):
+                idx = bgm_idx + 1 + len(src_chains)
+                src_inputs += ["-ss", f"{cut_start:.3f}", "-t", f"{args.intro_dur:.3f}", "-i", str(path)]
+                fades = "" if i == 0 else f",afade=t=in:d={AUDIO_CUT_FADE:g}"
+                if i < len(cuts) - 1:
+                    fades += f",afade=t=out:st={args.intro_dur - AUDIO_CUT_FADE:g}:d={AUDIO_CUT_FADE:g}"
+                src_chains.append(f"[{idx}:a]asetpts=PTS-STARTPTS{fades}")
+            idx = bgm_idx + 1 + len(src_chains)
+            src_inputs += ["-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", str(path)]
+            src_chains.append(f"[{idx}:a]asetpts=PTS-STARTPTS")
+        # 導入の各カットの頭、購読ボタンの操作、当たりの穴に玉が入る瞬間、結果表示で効果音を鳴らす
+        intro_se = [(name, i * args.intro_dur) for i, name in enumerate(INTRO_SE[:len(cuts)])]
+        se_inputs, se_chains = se_audio_inputs(intro_se + subscribe_se + goal_se + result_se, bgm_idx + 1 + len(src_chains),
+                                               args.se_volume)
+        afilt = mix_audio_filter(src_chains, bgm_idx, total, args.bgm_volume, args.src_volume, se_chains)
         run_ffmpeg(
-            ["ffmpeg", "-y", *concat_inputs, "-stream_loop", "-1", "-i", str(bgm),
+            ["ffmpeg", "-y", *concat_inputs, "-stream_loop", "-1", "-i", str(bgm), *src_inputs, *se_inputs,
              "-filter_complex", f"{concat_v};{afilt}",
              "-map", "[outv]", "-map", "[aout]",
              "-c:v", "libx264", "-preset", "medium", "-crf", "20",
              "-c:a", "aac", "-ar", "44100", "-b:a", "128k",
              "-movflags", "+faststart",
              str(final_path)],
-            f"導入＋本編を連結しBGMを合成中（全体 約{total:.1f}秒）")
+            f"導入＋本編を連結し音声を合成中（全体 約{total:.1f}秒、{audio_desc}）")
 
     if not args.keep_temp:
         for tmp in temp_files:
@@ -1459,7 +1572,15 @@ def cmd_finalize(args):
     print(f"  長さ  : {out_info['duration']:.2f} 秒 / {out_info['width']}x{out_info['height']} / {out_info['fps']:.0f}fps")
     if args.intro:
         print(f"  導入  : ①並ぶ→②転がる→③並ぶ（各{args.intro_dur:g}秒）→ 本編")
-    print(f"  音声  : BGMのみ {bgm.name}（volume={args.bgm_volume}、元素材の音声はミュート）")
+    print(f"  音声  : {audio_desc} / BGM素材 {bgm.name}")
+    if args.intro:
+        print(f"  効果音: 導入①②③の頭に {' / '.join(INTRO_SE)}（volume={args.se_volume}）")
+    for name, at in subscribe_se:
+        print(f"  効果音: 再生{at:.2f}秒に {name}（購読ボタン）")
+    for name, at, _gain in goal_se:
+        print(f"  効果音: 再生{at:.2f}秒に {name}（当たりの穴）")
+    for name, at in result_se:
+        print(f"  効果音: 再生{at:.2f}秒に {name}（結果表示）")
     print(f"  装飾  : 左上に「{MARBLE_TEXT}」3段（煽りと同じ区間、演出{MARBLE_ANIM_DUR:g}秒）")
     print(f"  煽り  : 「{AORI_TEXT}」（再生{aori_g_start:g}〜{aori_g_end:g}秒）"
           f" / 英語字幕（再生{eng_g_out:g}秒から左→右に退場、{eng_g_end:g}秒で消え切る）")
@@ -1525,7 +1646,10 @@ def main():
     p_fin.add_argument("--thankyou", help="Thank youオーバーレイ動画（省略時は assets/→input/ から自動検出）")
     p_fin.add_argument("--no-thankyou", action="store_true", help="Thank youオーバーレイを入れない")
     p_fin.add_argument("--bgm", help="使用するBGMファイル（省略時は bgm/ の既存音源を自動選択）")
-    p_fin.add_argument("--bgm-volume", type=float, default=0.5, help="BGM音量（既定0.5、元素材ミュートのためBGMが唯一の音声）")
+    p_fin.add_argument("--bgm-volume", type=float, default=0.5, help="BGM音量（既定0.5）")
+    p_fin.add_argument("--goal-times", help="当たりの穴に玉が入る時刻をカンマ区切りで指定（再生時間基準。例: 19.97,20.27）。各時刻で効果音を鳴らす")
+    p_fin.add_argument("--se-volume", type=float, default=1.0, help="効果音の音量（既定1.0）")
+    p_fin.add_argument("--src-volume", type=float, default=SRC_VOLUME_DEFAULT, help=f"素材の音声の音量（既定{SRC_VOLUME_DEFAULT:g}。素材の音が小さいので持ち上げている。0でミュート）")
     p_fin.add_argument("--keep-temp", action="store_true", help="中間テキストファイルを残す")
     p_fin.set_defaults(func=cmd_finalize)
 
