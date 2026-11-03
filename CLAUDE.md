@@ -18,7 +18,7 @@ project/
 ├── se/                  # 効果音素材（著作権フリーのみ）
 ├── assets/              # 再利用するオーバーレイ動画（SUBSCRIBEボタン・Thank you等）
 ├── output/              # 完成済みShort動画（タイムスタンプ付き）
-├── fonts/               # 日本語フォント（NotoSansJP.ttf 等）
+├── fonts/               # フォント（MPLUS1p-ExtraBold.ttf・MPLUS1p-Bold.ttf。gitには含めない）
 ├── templates/
 │   ├── metadata.json    # タイトル・説明・タグのテンプレート
 │   ├── description.txt  # 説明文テンプレート
