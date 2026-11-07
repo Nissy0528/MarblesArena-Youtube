@@ -5,7 +5,26 @@ description: output/ フォルダの完成動画をYouTube Data API v3で自動�
 
 # YouTubeアップロードスキル（Marbles Arena）
 
-## 前提条件
+## 現在の運用：YouTube Studio から手動投稿（当面）
+2026-11 から、しばらくは**ユーザーが YouTube Studio で手動投稿**する。API用の認証情報（`.env` / クライアントシークレット）は未設定で、監査前のAPIプロジェクトから投稿した動画は非公開に固定されるため。**Claude は API での投稿（`--dry-run` なしの `upload.py` 実行）を行わない。** 以下の「前提条件」以降は、将来API投稿に戻す場合の手順として残している。
+
+### 手動投稿の手順
+1. 説明文1行目の「一言コメント」をユーザーに確認する
+2. 投稿内容を生成する（採番・二重投稿チェックも行われる）
+   ```bash
+   PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python scripts/upload.py --comment "{一言コメント}" --dry-run
+   ```
+3. 出力されたタイトル・説明文・タグを、Studio に貼り付けられる形でユーザーに提示する
+   - タグはカンマ区切りで提示（Studio の「すべて表示」内のタグ欄）
+   - カテゴリ「ゲーム」、公開設定「公開」もあわせて伝える
+4. 投稿後、ユーザーから動画のURL（例 `https://youtube.com/shorts/{動画ID}`）を受け取る
+5. `uploaded_log.csv` に記録する（`upload.py` の `log_upload` を使うと形式がそろう）
+   ```bash
+   PYTHONUTF8=1 python -c "import sys; sys.path.insert(0,'scripts'); import upload; upload.log_upload('{ファイル名}.mp4','{動画ID}',{season},{part})"
+   ```
+6. `python scripts/upload.py --list` で次の採番が進んだこと（例 s3p1 → s3p2）を確認する
+
+## 前提条件（API投稿に戻す場合）
 - `.env` に以下が設定済みであること
   - `YOUTUBE_CLIENT_SECRET_PATH`（OAuthクライアントシークレットJSONのパス）
   - `YOUTUBE_TOKEN_PATH`（初回認証後に保存されるトークンファイルのパス）
