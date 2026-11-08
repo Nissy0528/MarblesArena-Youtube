@@ -108,4 +108,4 @@ PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python scripts/edit.py finalize \
 - **編集のたびに、output/ の完成動画は最新1本だけ残す**（旧版は削除）。テスト動画は `test*.mp4` の名前で分ける
 - `scripts/upload.py` は `YYYYMMDD_HHMMSS` 形式のファイル名だけを投稿候補にする（テスト動画の誤投稿防止）
 - 動画の見どころ区間（`--start`）は、本編集前にユーザーへ確認する
-- BGMは `bgm/` の既存音源を使い続ける（新規選定はしない）
+- BGMは `bgm/` の音源から動画ごとにランダムで1曲選ぶ（`--bgm` で明示指定も可）

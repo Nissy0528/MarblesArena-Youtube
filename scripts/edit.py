@@ -313,7 +313,7 @@ def unique_output(stem, suffix=".mp4"):
 
 
 def pick_bgm(explicit=None):
-    """bgm/ の既存音源を使う（新規選定はしない）。複数ある場合は名前順の先頭。"""
+    """explicit があればそれを使い、なければ bgm/ の音源からランダムに1つ選ぶ。"""
     if explicit:
         path = Path(explicit)
         if not path.is_absolute():
@@ -326,7 +326,7 @@ def pick_bgm(explicit=None):
     if not candidates:
         print("[edit] bgm/ にBGM素材がありません。既存BGMを bgm/ に配置してください。", file=sys.stderr)
         sys.exit(1)
-    return candidates[0]
+    return random.choice(candidates)
 
 
 def resolve_overlay(explicit, candidates):
@@ -1012,6 +1012,7 @@ def cmd_finalize(args):
             print(f"[edit] フォントが見つかりません: {rel}", file=sys.stderr)
             sys.exit(1)
     bgm = pick_bgm(args.bgm)
+    print(f"[edit] BGM: {bgm.name}")
     subscribe = None if args.no_subscribe else resolve_overlay(args.subscribe, SUBSCRIBE_CANDIDATES)
     thankyou = None if args.no_thankyou else resolve_overlay(args.thankyou, THANKYOU_CANDIDATES)
     if not args.no_subscribe and subscribe is None:
@@ -1669,7 +1670,7 @@ def main():
     p_fin.add_argument("--ty-dur", type=float, default=4.0, help="Thank you表示秒数（既定4）")
     p_fin.add_argument("--thankyou", help="Thank youオーバーレイ動画（省略時は assets/→input/ から自動検出）")
     p_fin.add_argument("--no-thankyou", action="store_true", help="Thank youオーバーレイを入れない")
-    p_fin.add_argument("--bgm", help="使用するBGMファイル（省略時は bgm/ の既存音源を自動選択）")
+    p_fin.add_argument("--bgm", help="使用するBGMファイル（省略時は bgm/ の音源からランダムに選択）")
     p_fin.add_argument("--bgm-volume", type=float, default=0.5, help="BGM音量（既定0.5）")
     p_fin.add_argument("--goal-times", help="当たりの穴に玉が入る時刻をカンマ区切りで指定（再生時間基準。例: 19.97,20.27）。各時刻で効果音を鳴らす")
     p_fin.add_argument("--se-volume", type=float, default=1.0, help="効果音の音量（既定1.0）")
