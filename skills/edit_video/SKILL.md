@@ -10,7 +10,7 @@ description: input/ の長尺録画（マーブルラン素材）から、額縁
 
 ## 入力
 - `input/` の長尺録画（MP4、実測：1080×1920 / 60fps / H.264 / AAC 48kHz、約60〜61秒）
-- `bgm/` の既存BGM（前回動画から引き続き使用。新規選定はしない）
+- `bgm/` の既存BGM（動画ごとにランダムで1曲選ぶ。`--bgm` で指定も可）
 - `assets/` のオーバーレイ動画（再利用素材、著作権フリー）
   - SUBSCRIBEボタン：グリーンバック（例 `サブスクライブ素材｜英語・シンプル・Youtube.mp4`）
   - Thank you：黒背景の筆記体アニメ（例 `67183_1280x720.mp4`）
@@ -64,7 +64,7 @@ description: input/ の長尺録画（マーブルラン素材）から、額縁
 - `--ty-start`（既定：SUBSCRIBE直後）`--ty-dur 4`：Thank youの表示開始・秒数
 - `--subscribe / --thankyou`：オーバーレイ素材のパス（省略時は assets/→input/ から自動検出）
 - `--no-subscribe / --no-thankyou`：各オーバーレイを入れない
-- `--bgm`（省略時 bgm/ 自動選択）`--bgm-volume 0.5` `--src-volume 1.5`（0でミュート） `--se-volume 1.0` `--goal-times 19.97,20.27`（当たりの穴に玉が入る再生時刻。映像で確認して指定）
+- `--bgm`（省略時 bgm/ からランダム選択）`--bgm-volume 0.5` `--src-volume 1.5`（0でミュート） `--se-volume 1.0` `--goal-times 19.97,20.27`（当たりの穴に玉が入る再生時刻。映像で確認して指定）
 - `--keep-temp`：中間テキストを残す
 
 ## エラー時の対処
