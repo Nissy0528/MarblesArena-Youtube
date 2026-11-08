@@ -1081,7 +1081,7 @@ def cmd_finalize(args):
 
     OUTPUT_DIR.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    final_path = unique_output(stamp)
+    final_path = unique_output(path.stem)
 
     # 日本語・記号を含むテキストはエスケープ問題を避けるため textfile で渡す
     aori_txt = OUTPUT_DIR / f"{stamp}_aori.txt"

@@ -43,7 +43,7 @@ description: input/ の長尺録画（マーブルラン素材）から、額縁
    ```bash
    PYTHONUTF8=1 PYTHONIOENCODING=utf-8 python scripts/edit.py finalize "input/{ファイル名}.mp4" --start {確定開始秒}
    ```
-6. **出力**：`output/YYYYMMDD_HHMMSS.mp4`（既存は上書きしない。中間テキストは自動削除）
+6. **出力**：`output/{素材と同じファイル名}.mp4`（既存は上書きせず末尾に `_2` などを付ける。中間テキストは自動削除）
 
 ## finalize が内部で行うこと（単一の filter_complex で1パス処理）
 1. トリム（`--start`〜`--end`、既定は末尾まで）＋ `fps=30` 化

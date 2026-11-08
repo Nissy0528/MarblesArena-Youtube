@@ -11,7 +11,7 @@
   python scripts/upload.py --list                                  # 未投稿ファイルと次の採番を確認
   python scripts/upload.py --comment "のびてぇぇ" --dry-run         # メタデータの事前確認
   python scripts/upload.py --comment "のびてぇぇ"                   # 最新の未投稿ファイルを投稿
-  python scripts/upload.py --file output/20260719_120000.mp4 --comment "のびてぇぇ"
+  python scripts/upload.py --file output/N021_ピンク黃緑オレンジ_ピンクオレンジ_緑場外.mp4 --comment "のびてぇぇ"
 """
 
 import argparse
@@ -24,6 +24,7 @@ from datetime import datetime
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+INPUT_DIR = PROJECT_ROOT / "input"
 OUTPUT_DIR = PROJECT_ROOT / "output"
 METADATA_PATH = PROJECT_ROOT / "templates" / "metadata.json"
 THUMBNAIL_PATH = PROJECT_ROOT / "templates" / "thumbnail.png"
@@ -34,8 +35,10 @@ ENV_PATH = PROJECT_ROOT / ".env"
 SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
 LOG_FIELDS = ["timestamp", "filename", "video_id", "season", "part"]
 
-# 完成動画は YYYYMMDD_HHMMSS[...].mp4 形式。これ以外（プレビュー・中間・テスト用）は投稿候補にしない
-TIMESTAMP_RE = re.compile(r"^\d{8}_\d{6}")
+
+def is_finished_video(path):
+    """完成動画は素材と同じ名前（同名があれば末尾に _2 などが付く）。それ以外（プレビュー・中間・テスト用）は投稿候補にしない。"""
+    return any((INPUT_DIR / f"{stem}.mp4").exists() for stem in (path.stem, re.sub(r"_\d+$", "", path.stem)))
 
 
 def load_env():
@@ -71,8 +74,8 @@ def list_unuploaded():
     if OUTPUT_DIR.exists():
         for p in sorted(OUTPUT_DIR.glob("*.mp4")):
             name = p.name
-            if not TIMESTAMP_RE.match(name):
-                continue  # プレビュー・中間・テスト用など、採番ルール外の名前は対象外
+            if not is_finished_video(p):
+                continue  # プレビュー・中間・テスト用など、素材と対応しない名前は対象外
             if name in uploaded:
                 continue
             candidates.append(p)
