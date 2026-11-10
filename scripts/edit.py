@@ -65,7 +65,7 @@ RESULT_LABEL_REVEAL = 0.3        # 当たり色の文字が生えきるまでの
 RESULT_LABEL_GAP = 4             # バナーの縁と当たり色の文字のすき間
 # 当たりが1色だけのとき（バナーは上から下へ伸び、色名は下から上へ出現して短く点滅）
 SINGLE_FONTSIZE = 225            # 色名の文字サイズ（インク高さ約167px）
-SINGLE_MAX_W = 1040              # 拡大しきった色名の幅の上限px。超える長い色名（LIGHT BLUE 等）は文字サイズを自動で縮める
+SINGLE_FRAME_MARGIN = 24         # バナーの左右の端と、額縁の内側（ゲーム映像の端）とのすき間px
 SINGLE_RISE = 0.5                # 色名が下から上へ出現しきるまでの秒数（円形「GOAL!!」の上への移動も同じ秒数で止まる）
 SINGLE_RISE_EASE = 4             # 出現の減速の強さ（大きいほど最初速く、だんだんゆっくり）
 SINGLE_ZOOM = 1.15               # 上がりきった後に拡大する倍率
@@ -158,6 +158,11 @@ PREVIEW_TAIL_SECONDS = 30.0  # 仮切り出しの初期ルール: 末尾から30
 
 # 額縁レイアウト
 INNER_SCALE = 0.91  # 内側に置くゲーム映像の横幅比率（外周はぼかし背景）
+INNER_W = round(1080 * INNER_SCALE / 2) * 2   # 内側のゲーム映像の横幅px（982）
+
+# 当たりが1色のときの結果表示は、外枠のぼかしにかからないよう額縁の内側に収める
+SINGLE_BANNER_MAX_W = INNER_W - 2 * SINGLE_FRAME_MARGIN       # バナー幅の上限px（934）
+SINGLE_MAX_W = SINGLE_BANNER_MAX_W - 2 * SINGLE_BANNER_PAD_X  # 拡大しきった色名の幅の上限px（854）。超える色名は文字サイズを自動で縮める
 
 # SUBSCRIBE / Thank you の垂直中心の既定値（下部）。--sub-y で調整可。両者をこの高さに揃える。
 CTA_CENTER_Y_DEFAULT = 1560
@@ -775,7 +780,7 @@ def result_single_layer_filters(src, res_start, result_y, lay, rel, rgb, chev=Fa
     # バナー：色名が拡大し始めると同時に、上辺を固定して下辺が下りてくる。色は黄→黒→黄→黒。
     # 大きさは拡大しきった色名が収まるように決める（高さは色名＋上下の余白、幅は既定幅より広い色名なら広げる）
     bh = max(RESULT_BANNER_H, round(ih * SINGLE_ZOOM) + 2 * SINGLE_BANNER_PAD_Y)
-    bw = min(1080, max(RESULT_BANNER_W, round(iw * SINGLE_ZOOM) + 2 * SINGLE_BANNER_PAD_X))
+    bw = min(SINGLE_BANNER_MAX_W, max(RESULT_BANNER_W, round(iw * SINGLE_ZOOM) + 2 * SINGLE_BANNER_PAD_X))
     bx0, bx1 = (1080 - bw) // 2, (1080 + bw) // 2
     b_top = round(cyb - bh / 2)
     tb = f"(T-{t_up:g})"
@@ -1090,7 +1095,7 @@ def cmd_finalize(args):
     eng_txt.write_text(ENGLISH_SUBTITLE, encoding="utf-8")
     temp_files = [aori_txt, eng_txt]
 
-    inner_w = round(1080 * INNER_SCALE / 2) * 2
+    inner_w = INNER_W
     inner_h = round(1920 * INNER_SCALE / 2) * 2
 
     # 入力: 0=元素材(トリム), 1=BGM(ループ), 以降=オーバーレイ動画
@@ -1166,7 +1171,7 @@ def cmd_finalize(args):
             mid = (len(label3) - 1) // 2                    # 真ん中2文字を上から下ろす
             goal_move_idx = (mid, min(mid + 1, len(label3) - 1))
         keys = keys[:2]
-        if not keys:
+        if not keys and not single_mode:
             print("[edit] 注意: 当たりの玉の色が判別できないため色表示は入れません（--result-colors で指定できます）。")
         for i, key in enumerate(keys):
             label, _furi, fill, _fg = COLOR_MAP[key]
